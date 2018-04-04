@@ -1,16 +1,27 @@
 import pandas as pd, numpy as np
 
 class Node(object):
-    def __init__(self,info,parent=None,right=None,left=None):
+    def __init__(self,index,parent=None,left=None,right=None,**karg):
         """info should contain: index, cutting variable and cutting point, greatest decent value"""
-        self.info=info
+        self.index=index
         self.parent=parent
         self.right=right
         self.left=left
-    
+        if karg:
+            self.effect=karg["effect"]
+            self.var=karg["var"]
+            self.cut=karg["cut"]
+            self.Lindex=karg["Lindex"]
+            self.Rindex=karg["Rindex"]
+            self.dtype=karg["dtype"]
+        self.pred=None
+        self.prev=None
+        self.next=None
+        
     @property
     def get_info(self):
-        return self.info
+        info={"index":self.index,"effect":self.effect,"var":self.var,"cut":self.cut,"Lindex":self.Lindex,"Rindex":self.Rindex}
+        print(info)
         
     @property    
     def get_parent(self):
@@ -31,10 +42,34 @@ class Node(object):
     def set_right(self,node):
         assert isinstance(node,Node)
         self.right=node
+    
+    def set_info(self,**karg):
+        """set the node info with input dictionary"""
+        self.effect=karg["effect"]
+        self.var=karg["var"]
+        self.cut=karg["cut"]
+        self.Lindex=karg["Lindex"]
+        self.Rindex=karg["Rindex"]
+        self.dtype=karg["dtype"]
+        return 
+    
+    def set_pred(self,pred):
+        self.pred=pred
+        return 
+    
+    def set_next(self,node):
+        self.next=node
+        
+    def set_prev(self,node):
+        self.prev=node
         
     def __repr__(self):
-        return str(self.info)
-        
+        if self.pred == None:
+            return str({"var":self.var,"cut":self.cut})
+        else:
+            return str({"pred":self.pred})
+    
+    
 class Tree(object):
     def __init__(self,root):
         assert isinstance(root,Node)
@@ -73,22 +108,18 @@ class Tree(object):
         """find which leaf does the input data belongs to and make prediction"""
         root=self.root
         while not self.is_leaf(root):
-            print(root.get_info["var"])
-            x=newdata[root.get_info["var"]]
-            if root.get_info["dtype"]!="Continuous":
-                if x in root.get_info["cut"]:
+            x=newdata[root.var]
+            if root.dtype!="Continuous":
+                if x in root.cut:
                     root=root.get_left
                 else:
-                    print(root.get_info["cut"])
                     root=root.get_right
             else:
-                if x<=root.get_info["cut"]:
+                if x<=root.cut:
                     root=root.get_left
-                    print("float left")
                 else:
                     root=root.get_right
-                    print("float right")
-        return root.get_info["pred"]
+        return root.pred
            
     def print_var(self):
         """for every non-leaf node print out the splitting variable"""
@@ -96,10 +127,9 @@ class Tree(object):
             if self.is_leaf(node):
                 return
             else:
-                print(node.get_info["var"])
+                print(node.var)
                 helper(node.get_left)
                 helper(node.get_right)
-        
         helper(self.root)
         return 
     
@@ -139,7 +169,7 @@ class MaxHeap(object):
         
     def bubble_up(self,j):
         parentid=self.parent_id(j)
-        while j>0 and self.struct[j].get_info["effect"]>self.struct[parentid].get_info["effect"]:
+        while j>0 and self.struct[j].effect>self.struct[parentid].effect:
             self.swap(j,parentid)
             j=parentid
             parentid=self.parent_id(j)
@@ -152,7 +182,7 @@ class MaxHeap(object):
         else:
             maxid=idx[0]
             for i in idx:
-                if self.struct[i].get_info["effect"]>self.struct[maxid].get_info["effect"]:
+                if self.struct[i].effect>self.struct[maxid].effect:
                     maxid=i
             return maxid
 
@@ -161,7 +191,7 @@ class MaxHeap(object):
         childrenid=self.children_id(j)
         maxid=self._maxid(childrenid)
         while childrenid:
-            if self.struct[j].get_info["effect"]>=self.struct[maxid].get_info["effect"]:
+            if self.struct[j].effect>=self.struct[maxid].effect:
                 break
             else:
                 self.swap(j,maxid)
@@ -177,7 +207,7 @@ class MaxHeap(object):
         if not childrenid:
             return 
         else:
-            if self.struct[j].get_info["effect"]<self.struct[maxid].get_info["effect"]:
+            if self.struct[j].effect<self.struct[maxid].effect:
                 self.swap(j,maxid)
                 self._max_heapify(maxid)
             return 
@@ -206,19 +236,55 @@ class MaxHeap(object):
         self.struct.append(node)
         self.size+=1
         self.bubble_up(self.size-1)
+
+class Dequeue(object):
+    def __init__(self,head=None):
+        self.head=head
+        self.tail=head
+        if head == None:
+            self.size=0
+        else:
+            self.size=1
+            
+    def Inqueue(self,node):
+        """left insert the node"""
+        if self.size>0:
+            node.set_next(self.head)
+            self.head.set_prev(node)
+            self.head=node
+        else:
+            self.head=self.tail=node
+        self.size+=1
+        return 
         
+    def Dequeue(self):
+        """right pop out the node"""
+        if self.size>=1:
+            node=self.tail
+            if self.size>1:
+                self.tail=self.tail.prev
+                self.tail.next.set_prev(None)
+                self.tail.set_next(None)
+            elif self.size==1:
+                self.head=self.tail=None
+            self.size-=1            
+            return node
+        else:
+            print("empty queue!")
+            return 
     
+        
 class Config(object):
-    def __init__(self,minobv=50,maxleaves=4,var=None,family="Gaussian",LossFunction="LeastSquare",stop="CaseInNode"):
-        self.family=family
-        self.LossFunction=LossFunction
+    def __init__(self,minobv=50,maxleaves=4,var=None,stop="CaseInNode"):
         self.stop=stop
         self.minobv=minobv
         self.var=var
         self.maxleaves=maxleaves
         
 class CART(object):
-    """Classification and Regression Tree, implemented by max_heap data structure and binary tree"""
+    """Classification and Regression Tree, implemented by max_heap data structure and binary tree.
+       Only implemented square error loss and Gini index impurity, other loss could also be added by user, but would have to modify
+       part of the code"""
     def __init__(self,target,dataset,Config):
         self.dataset=dataset.copy()
         self.target=target
@@ -235,21 +301,16 @@ class CART(object):
         if self.config.stop=="CaseInNode":
             sprime=self.FindBestSplit(node)
             if sprime is None:
-                node.get_info["pred"]=self.target.loc[node.get_info["index"]].mean()
+                node.set_pred(self.target.loc[node.index].mean())
                 return False
-            else:
-                node.get_info["effect"]=sprime["effect"]
-                node.get_info["var"]=sprime["var"]
-                node.get_info["cut"]=sprime["cut"]
-                node.get_info["Lindex"]=sprime["Lindex"]
-                node.get_info["Rindex"]=sprime["Rindex"]
-                node.get_info["dtype"]=sprime["dtype"]
+            else:  
+                node.set_info(**sprime)
                 return True
 
                 
     def FindBestSplit(self,node):
         """find the best splitting variable and cut point of a node""" 
-        if node.get_info["index"].size<=self.config.minobv:
+        if node.index.size<=self.config.minobv:
             return 
         else:
             varprime,cutprime,effectprime,dtypeprime=None,None,None,None
@@ -274,7 +335,7 @@ class CART(object):
                 
     def ContinuousSplite(self,node,arg):
         """arg is a continuous variable, return the best cut point and effect of splitting on arg"""
-        subindex=node.get_info["index"]
+        subindex=node.index
         nt=subindex.size
         subset=self.dataset.loc[subindex,arg]
         subset.sort_values(inplace=True)
@@ -298,20 +359,20 @@ class CART(object):
         return maxeffect,bestcut,Lindex,Rindex
     
     def DiscreteSplite(self,node,arg):
-        """return the best split on arg if arg is discrete variable"""
-        xarg=self.dataset.loc[node.get_info["index"],arg]
+        """return the best split on arg if arg is discrete (categorical) variable"""
+        xarg=self.dataset.loc[node.index,arg]
         categories=pd.Categorical(list(xarg))
         if categories.categories.size>1:
-            source={i:[0,0] for i in categories.categories}
+            source={i:[0,0,0] for i in categories.categories}
             idxalloc={i:[] for i in categories.categories}
             for i in xarg.index:
                 cate=xarg.loc[i]
                 source[cate][0]+=1
                 source[cate][1]+=self.target.loc[cate]
+                source[cate][2]=source[cate][1]/source[cate][0]
                 idxalloc[cate].append(i)
-            for i in source:
-                source[i].append(source[i][1]/source[i][0])
-            source=pd.DataFrame(source)    
+                assert len(idxalloc[cate])==source[cate][0]
+            source=pd.DataFrame(source)
             source.sort_values(by=2,axis=1,inplace=True)
             sl=source.iloc[1,0]
             sr=source.iloc[1,1:].sum()
@@ -336,14 +397,14 @@ class CART(object):
             return 
             
     def Splite(self,node):
-        leftnode=Node({"index":node.get_info["Lindex"]},node)
-        rightnode=Node({"index":node.get_info["Rindex"]},node)  
+        leftnode=Node(node.Lindex,node)
+        rightnode=Node(node.Rindex,node)  
         self.tree.set_left(node,leftnode)
         self.tree.set_right(node,rightnode)
         return leftnode,rightnode
         
-    def Part(self):
-        root=Node({"index":self.dataset.index})
+    def Part_Max(self):
+        root=Node(self.dataset.index)
         self.tree=Tree(root)
         leaves=1
         self.heap=MaxHeap()
@@ -358,10 +419,40 @@ class CART(object):
             if self.TestSplit(rnode):
                 self.heap.insert(rnode)
         for leaf in self.tree.get_leaves():
-            if "pred" not in leaf.get_info:
-                leaf.get_info["pred"]=self.target.loc[leaf.get_info["index"]].mean()
+            if leaf.pred == None:
+                leaf.set_pred(self.target.loc[leaf.index].mean())
         return
     
+    def Part_BFS(self):
+        root=Node(self.dataset.index)
+        self.queue=Dequeue()
+        self.tree=Tree(root)
+        leaves=1
+        if self.TestSplit(root):
+            self.queue.Inqueue(root)
+        while self.queue.size!=0 and leaves<self.config.maxleaves:
+            priority=self.queue.Dequeue()
+            lnode,rnode=self.Splite(priority)
+            leaves+=1
+            if self.TestSplit(lnode):
+                self.queue.Inqueue(lnode)
+            if self.TestSplit(rnode):
+                self.queue.Inqueue(rnode)
+        for leaf in self.tree.get_leaves():
+            if leaf.pred == None:
+                leaf.set_pred(self.target.loc[leaf.index].mean())
+        return 
+    
+    def Fit(self,search="max"):
+        """fit the tree using max search or breadth first search"""
+        if search == "max":
+            self.Part_Max()
+        elif search == "bfs":
+            self.Part_BFS()
+        else:
+            print("invalid search method!")
+        return
+        
     def Predict(self,newdata):
         assert newdata.shape[1]==self.dataset.shape[1]
         newdata=newdata.copy()
@@ -380,9 +471,8 @@ if __name__=="__main__":
     data[8]=data[8].astype('int32').astype('category')
     data[3]=data[3].astype('int32').astype('category')
     target=pd.Series(boston.target)
-    config=Config(10,10)
+    config=Config(20,1000)
     rtree=CART(target,data,config)
-    rtree.Part() 
+    rtree.Fit("bfs")
     newdata=data
     print(rtree.Predict(newdata))
-    root=rtree.tree.get_leaves()[0].get_parent
