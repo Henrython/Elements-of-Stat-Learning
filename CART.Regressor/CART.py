@@ -404,6 +404,7 @@ class CART(object):
         return leftnode,rightnode
         
     def Part_Max(self):
+        """choose the node which cause the largest descent to to splite"""
         root=Node(self.dataset.index)
         self.tree=Tree(root)
         leaves=1
@@ -424,6 +425,7 @@ class CART(object):
         return
     
     def Part_BFS(self):
+        """Doing breadth first search to build up the tree"""
         root=Node(self.dataset.index)
         self.queue=Dequeue()
         self.tree=Tree(root)
